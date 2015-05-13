@@ -12,6 +12,7 @@ struct File{
 	char * Name;
 	int ** PageNumber;
 	int ** MemoryLocation;
+	int ByteLength;
 };
 
 struct Memory{ 
