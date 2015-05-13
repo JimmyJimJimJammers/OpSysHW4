@@ -27,6 +27,14 @@ struct Memory * CreateMemory(){
 	return MemoryBank;
 }
 
+
+
+
+//------------------------------------------------------------
+
+
+
+
 int main( int argc, char *argv[] ){
 	struct Memory *  MemoryBank = CreateMemory();
 	return EXIT_SUCCESS;
