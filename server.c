@@ -43,7 +43,7 @@ void *handle(void *pnewsock)
       }
       else {
         buffer[n] = '\0';
-        strcpy(buffer, "STORE asshat 20 \nlkjsaldkjsaldkjsa\n");
+        //strcpy(buffer, "STORE asshat 20 \nlkjsaldkjsaldkjsa\n");
         char *token;                           
         char **str = malloc(sizeof(char *));
         char substr[4];
