@@ -21,7 +21,7 @@ struct PageTable
 	int * PageNumber;      //array of page number
 	int * MemoryLocation;  //indices stored parallel to PageNumber
     
-	int offset;
+	int offset;       //where we start
 	int bytesincache; //Says the amount of bytes in cache
 	clock_t PageTableUseTime;
 };
@@ -99,28 +99,35 @@ void DeleteOldest(struct Memory* MemoryBank, int deletions){
 	int removedframes = 0;
 	struct PageTable ** Temp = calloc(MemoryBank->numPageTables,sizeof(struct PageTable));
 	int i;
-	while(removedframes != deletions || removedframes < deletions){
+	while(removedframes < deletions){
 		for (i = 0; i < MemoryBank->numPageTables; i++){
-			Temp[i] = MemoryBank->AllPageTables[i];
+			Temp[i] = MemoryBank->AllPageTables[i];             //THIS IS rearranging actual memorybank FIX THIS*****
 		}
 		MergeSort(Temp, MemoryBank->numPageTables);
 		for(i=0;i<numPages;i++){
 			if(Temp[0]->PageNumber[i] == -1){
-				break;
+				continue;
 			}
 			else{
 				//Delete it from cache
-				MemoryBank->frames[Temp[0]->MemoryLocation[i]] = "-1";
+				MemoryBank->frames[Temp[0]->MemoryLocation[i]] = "-1";          //THERE SHOULD BE FREE'S HERE
 				Temp[0]->PageNumber[i] = -1;
 				Temp[0]->MemoryLocation[i] = -1;
-				MemoryBank->freeFrames = MemoryBank->freeFrames - 1;
+				MemoryBank->freeFrames++;
 				removedframes = removedframes + 1;
 			}
+            if (removedframes < deletions) { break; }
 		}
-		for (i = 0; i < MemoryBank->numPageTables; i++){
+        if (removedframes < deletions) { break; }
+		for (i = 0; i < MemoryBank->numPageTables; i++){//looking for position of the thing we are deleting in original frames
 			if(strcmp(Temp[0]->Name,MemoryBank->AllPageTables[i]->Name) == 0){
 				int j;
-				for (j = 0; j < MemoryBank->numPageTables; j++){
+                
+                
+                //check if all the pageNums and CacheLocs == -1, if so delete the page table
+                //****NEED TO ADD IF STATEMENT******
+                
+				for (j = 0; j < MemoryBank->numPageTables; j++){ //move all page tables
 					MemoryBank->AllPageTables[j] = MemoryBank->AllPageTables[j+1];
 				}
 				MemoryBank->numPageTables = MemoryBank->numPageTables-1;
@@ -130,7 +137,46 @@ void DeleteOldest(struct Memory* MemoryBank, int deletions){
 }
 
 char ** GetDirDat(int offset, int length, char* fileName);
-void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int index, char* data);
+
+//given a page table, same data, and a pagenum, store the data in a CacheLoc and link the PageNum to the CacheLoc
+void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int pageNum, char* data)
+{
+    int min = INT_MIN;
+    int index = 0;
+    
+    int i;
+    for (i = 0; i < numPages; i++)
+    {
+        //look for the first -1 you can find.
+        if (pt->PageNumber[i] == -1)
+        {
+            index = i;
+            break;
+        }
+        else if(pt->PageNumber[i] > min) //Otherwise just overwrite the smallest indexed thing
+        {
+            index = i;
+            min = pt->PageNumber[i];
+        }
+    }
+    
+    //if the pagenum is -1 and the cacheLoc is -1, find a frame in CacheMem to store stuff
+    //WRITE METHOD TO ADD A FILEINFO (AKA A PAGE TABLE) TO THE FRAMES
+    
+    
+    //reassign pt->pageNumber[index] to pageNum(provided)
+    
+    
+    //store actual data in the frame we have reserved
+    
+    //set the name too just in case
+    
+    /*think about setting
+     int offset;       //where we start
+     int bytesincache; //Says the amount of bytes in cache
+     */
+    
+}
 
 int* findEmpty(struct Memory* MemoryBank, int framesNecessary){
 	if (framesNecessary > MemoryBank->freeFrames){
@@ -263,7 +309,7 @@ char* returnPartial(struct PageTable* pt, struct Memory* MemoryBank, int offset,
         {
             strcat(ret,  startStuff[i]);
             startBytesWritten += 999999;
-            AddToPageTable(pt, MemoryBank, (l%numPages), startStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            AddToPageTable(pt, MemoryBank, l, startStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
             i++;
             l++;
             
@@ -272,7 +318,7 @@ char* returnPartial(struct PageTable* pt, struct Memory* MemoryBank, int offset,
         {
             strcat(ret, temp[j]);
             cacheBytesWritten += 999999;
-            AddToPageTable(pt, MemoryBank, (l%numPages), temp[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            AddToPageTable(pt, MemoryBank, l, temp[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
             j++;
             l++;
         }
@@ -280,7 +326,7 @@ char* returnPartial(struct PageTable* pt, struct Memory* MemoryBank, int offset,
         {
             strcat(ret, endStuff[k]);
             endBytesWritten += 9999999;
-            AddToPageTable(pt, MemoryBank, (l%numPages), endStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            AddToPageTable(pt, MemoryBank, l, endStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
             k++;
             l++;
         }
