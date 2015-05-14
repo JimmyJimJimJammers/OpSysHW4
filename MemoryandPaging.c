@@ -13,11 +13,14 @@
 #define numFrames 32
 #define frameSize 1024
 #define numPages 4
+#define maxData 50000
 
-struct PageTable{
+struct PageTable
+{
 	char * Name;
 	int * PageNumber;      //array of page number
 	int * MemoryLocation;  //indices stored parallel to PageNumber
+    
 	int offset;
 	int bytesincache; //Says the amount of bytes in cache
 	clock_t PageTableUseTime;
@@ -25,6 +28,7 @@ struct PageTable{
 
 struct Memory{ 
 	char ** frames;
+    int * frameBytes;
 	struct PageTable ** AllPageTables;
 	int freeFrames;
 	int numPageTables;
@@ -56,12 +60,9 @@ struct Memory * CreateMemory(){
 	MemoryBank->AllPageTables = malloc(AllPageTablesSize);
 	MemoryBank->freeFrames = numFrames;
 	MemoryBank->numPageTables = 0;
+    frameBytes = 0;
 	return MemoryBank;
 }
-
-//~ int findMaxElement(struct Memory* MemoryBank, int* indices){ //finds max element in an array and returns that index
-    //~ int maxValIndex = INT_MAX;
-//~ }
 
 void Merge(struct PageTable **pt, struct PageTable **Lpt, int leftCount, struct PageTable **Rpt, int rightCount) {
     int i,j,k;
@@ -73,6 +74,7 @@ void Merge(struct PageTable **pt, struct PageTable **Lpt, int leftCount, struct 
     while(i < leftCount) pt[k++] = Lpt[i++];
     while(j < rightCount) pt[k++] = Rpt[j++];
 }
+
 void MergeSort(struct PageTable **pt, int n) {
     int mid,i;
     struct PageTable **L = malloc(sizeof(struct PageTable*)*((n/2) + 1));
@@ -151,7 +153,282 @@ int* findEmpty(struct Memory* MemoryBank, int framesNecessary){
 	return framesreturned;
 }
 
-//------------------------------------------------------------
+//function for returning full information from cache
+char* returnFull(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+{
+    char * ret = malloc(maxData*sizeof(char));
+    
+    //find start point
+    int index = 0;
+    int max = INT_MAX;
+    int i;
+    for (i = 0; i < numPages; i++)
+    {
+        if (pt->PageNumber < max)
+        {
+            index = i;
+            max = pt->PageNumber;
+        }
+    }
+    
+    int sentBytes = 0;
+    while (sentBytes < length-offset)
+    {
+        //send message SENT ACK frameBytes to client
+        //************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->[index]]);
+        sentBytes += MemoryBank->framesBytes[pt->[index]];
+    }
+    
+    pt->PageTableUseTime = clock();
+    
+    return ret;
+}
+
+//start of the find is missing
+char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+{
+    char * ret = malloc(maxData*sizeof(char));
+    
+    //find start point
+    int index = 0;
+    int max = INT_MAX;
+    int i;
+    for (i = 0; i < numPages; i++)
+    {
+        if (pt->PageNumber < max)
+        {
+            index = i;
+            max = pt->PageNumber;
+        }
+    }
+    
+    //figure out how many frames are necessary to add to the start
+    int startDifference = pt->offset - offset;
+    
+    if (startDifference % frameSize == 0) // if it divides evenly don't add one
+    {
+        startDifference = startDifference/frameSize;
+    }
+    else
+    {
+        startDifference = (startDifference/frameSize)+1;
+    }
+    
+    //figure out how many frames are necessary to add to the end
+    int endDifference = offset + length - pt->offset + pt->bytesincache;
+    if (endDifference % frameSize == 0) // if it divides evenly don't add one
+    {
+        endDifference = startDifference/frameSize;
+    }
+    else
+    {
+        endDifference = (startDifference/frameSize)+1;
+    }
+    
+    int startTemp = startDifference;
+    int endTemp = (startDifference + numPages)-1;
+    
+    char ** temp[(endTemp-startTemp)+1];// = malloc((endTemp - startTemp)*sizeof(char*));
+    
+    //go through and save all the information we have cached on the desired data and store it in a temp
+    for (i = 0; i < (endTemp-startTemp)+1; i++)
+    {
+        temp[i] = MemoryBank->frames[pt->PageNumber[index + i]];
+    }
+    
+    //go get the start information from dir
+    char** startStuff = GetDirDat(offset, startDifference, pt->Name);
+    
+    //go get the end information from dir
+    char** endStuff = GetDirDat(endTemp, endDifference, pt->Name);
+    
+    
+    int startBytesWritten = 0;
+    int cacheBytesWritten = 0;
+    int endBytesWritten = 0;
+    
+    i = 0;
+    int j, k, l = 0;
+    //now go through all the stuff we don't have at the start, then the stuff we do have, then the stuff we don't have at the end, and cache them/return them
+    while (cacheBytesWritten + startBytesWritten + endBytesWritten < length-offset)
+    {
+        if (startBytesWritten < startDifference)
+        {
+            strcat(ret,  startStuff[i])
+            startBytesWritten += 999999;
+        }
+        else if(cacheBytesWritten < length-offset)
+        {
+            strcat(ret, temp[j]);
+            cacheBytesWritten += 999999;
+        }
+        else if(endBytesWritten < endDifference)
+        {
+            strcat(ret, endStuff[j]);
+            endBytesWritten += 9999999;
+        }
+        
+        strcat(ret, MemoryBank->frames[pt->[index]]);
+        sentBytes += MemoryBank->framesBytes[pt->[index]];
+    }
+    
+    
+    //decrement the index variable (wrap around if -1)
+    index--;
+    if (index == -1)
+    {
+        index = numPages-1;
+    }
+    
+    int sentBytes = 0;
+    while (sentBytes < length-offset)
+    {
+        //send message SENT ACK frameBytes to client
+        //************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->[index]]);
+        sentBytes += MemoryBank->framesBytes[pt->[index]];
+    }
+    
+    pt->PageTableUseTime = clock();
+    
+    return ret;
+}
+
+//end of the find is missing
+char* returnPartialEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+{
+    char * ret = malloc(maxData*sizeof(char));
+    
+    //find start point
+    int index = 0;
+    int max = INT_MAX;
+    int i;
+    for (i = 0; i < numPages; i++)
+    {
+        if (pt->PageNumber < max)
+        {
+            index = i;
+            max = pt->PageNumber;
+        }
+    }
+    
+    int sentBytes = 0;
+    while (sentBytes < length-offset)
+    {
+        //send message SENT ACK frameBytes to client
+        //************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->[index]]);
+        sentBytes += MemoryBank->framesBytes[pt->[index]];
+    }
+    
+    pt->PageTableUseTime = clock();
+    
+    return ret;
+}
+
+//Both start and end are missing
+char* returnPartialStartEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+{
+    char * ret = malloc(maxData*sizeof(char));
+    
+    //find start point
+    int index = 0;
+    int max = INT_MAX;
+    int i;
+    for (i = 0; i < numPages; i++)
+    {
+        if (pt->PageNumber < max)
+        {
+            index = i;
+            max = pt->PageNumber;
+        }
+    }
+    
+    int sentBytes = 0;
+    while (sentBytes < length-offset)
+    {
+        //send message SENT ACK frameBytes to client
+        //************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->[index]]);
+        sentBytes += MemoryBank->framesBytes[pt->[index]];
+    }
+    
+    pt->PageTableUseTime = clock();
+    
+    return ret;
+}
+
+char* FindInCache(struct Memory* MemoryBank, char* fileName, int offset, int length, int miguel)
+{
+    //find pagetable for fileName
+    PageTable *pt;
+    short inPageTable = 0;
+    
+    //find pagetable start
+    int i;
+    for (i = 0; i < MemoryBank->numPageTables; i++)
+    {
+        if(strcmp(MemoryBank->AllPageTables[i]->Name, fileName) == 0)
+        {
+            pt = MemoryBank->AllPageTables[i];
+            inPageTable = 1;
+            break;
+        }
+    }
+    
+    //if found it's either in partial or full
+    if (inPageTable)
+    {
+        short startGap = 0;
+        short endGap = 0;
+        
+        //check if the start is before or after requested start
+        if (pt->offset > offset) //(if start in cache is after start asked for)
+        {
+            startGap = 1;
+        }
+        //check if the end is before or after the requested end
+        if (pt->offset + pt->bytesincache < offset + length)
+        {
+            endGap = 1;
+        }
+        
+        
+        
+        //full find
+        if (!startGap && !endGap)
+        {
+            
+        }
+        
+        //if partial
+        //if we have only a start gap
+        if(startGap && !endGap)
+        {
+            
+        }
+        else if(!startGap && endGap) //if we only have an end gap
+        {
+            
+        }
+        else                        //if we have both a start and end gap
+        {
+            
+        }
+        
+        
+    }
+    else //else it's not in there at all
+    {
+        
+    }
+    
+    
+    
+    
+    
+}
 
 
 
