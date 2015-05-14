@@ -60,7 +60,7 @@ struct Memory * CreateMemory(){
 	MemoryBank->AllPageTables = malloc(AllPageTablesSize);
 	MemoryBank->freeFrames = numFrames;
 	MemoryBank->numPageTables = 0;
-    frameBytes = 0;
+    MemoryBank->frameBytes = malloc(AllPageTablesSize*sizeof(int));
 	return MemoryBank;
 }
 
@@ -96,7 +96,7 @@ void MergeSort(struct PageTable **pt, int n) {
 }
 
 void DeleteOldest(struct Memory* MemoryBank, int deletions){
-	int removedframes;
+	int removedframes = 0;
 	struct PageTable ** Temp = calloc(MemoryBank->numPageTables,sizeof(struct PageTable));
 	int i;
 	while(removedframes != deletions || removedframes < deletions){
@@ -129,6 +129,9 @@ void DeleteOldest(struct Memory* MemoryBank, int deletions){
 	}
 }
 
+char ** GetDirDat(int offset, int length, char* fileName);
+void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int index, char* data);
+
 int* findEmpty(struct Memory* MemoryBank, int framesNecessary){
 	if (framesNecessary > MemoryBank->freeFrames){
 		//Find the first ones in memory
@@ -154,7 +157,7 @@ int* findEmpty(struct Memory* MemoryBank, int framesNecessary){
 }
 
 //function for returning full information from cache
-char* returnFull(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+char* returnFull(struct PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
 {
     char * ret = malloc(maxData*sizeof(char));
     
@@ -164,10 +167,10 @@ char* returnFull(PageTable* pt, struct Memory* MemoryBank, int offset, int lengt
     int i;
     for (i = 0; i < numPages; i++)
     {
-        if (pt->PageNumber < max)
+        if (pt->PageNumber[i] < max)
         {
             index = i;
-            max = pt->PageNumber;
+            max = pt->PageNumber[i];
         }
     }
     
@@ -175,9 +178,10 @@ char* returnFull(PageTable* pt, struct Memory* MemoryBank, int offset, int lengt
     while (sentBytes < length-offset)
     {
         //send message SENT ACK frameBytes to client
-        //************************send some more crap************************
-        strcat(ret, MemoryBank->frames[pt->[index]]);
-        sentBytes += MemoryBank->framesBytes[pt->[index]];
+        // ************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->MemoryLocation[index]]);
+        sentBytes += MemoryBank->frameBytes[pt->MemoryLocation[index]];
+        index++;
     }
     
     pt->PageTableUseTime = clock();
@@ -186,7 +190,7 @@ char* returnFull(PageTable* pt, struct Memory* MemoryBank, int offset, int lengt
 }
 
 //start of the find is missing
-char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+char* returnPartial(struct PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
 {
     char * ret = malloc(maxData*sizeof(char));
     
@@ -196,10 +200,10 @@ char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, i
     int i;
     for (i = 0; i < numPages; i++)
     {
-        if (pt->PageNumber < max)
+        if (pt->PageNumber[i] < max)
         {
             index = i;
-            max = pt->PageNumber;
+            max = pt->PageNumber[i];
         }
     }
     
@@ -229,12 +233,12 @@ char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, i
     int startTemp = startDifference;
     int endTemp = (startDifference + numPages)-1;
     
-    char ** temp[(endTemp-startTemp)+1];// = malloc((endTemp - startTemp)*sizeof(char*));
+    char * temp[(endTemp-startTemp)+1];// = malloc((endTemp - startTemp)*sizeof(char*));
     
     //go through and save all the information we have cached on the desired data and store it in a temp
     for (i = 0; i < (endTemp-startTemp)+1; i++)
     {
-        temp[i] = MemoryBank->frames[pt->PageNumber[index + i]];
+        temp[i] = MemoryBank->frames[pt->PageNumber[index + i]]; //char* =
     }
     
     //go get the start information from dir
@@ -249,45 +253,37 @@ char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, i
     int endBytesWritten = 0;
     
     i = 0;
-    int j, k, l = 0;
+    int j = 0;
+    int k = 0;
+    int l = index;
     //now go through all the stuff we don't have at the start, then the stuff we do have, then the stuff we don't have at the end, and cache them/return them
     while (cacheBytesWritten + startBytesWritten + endBytesWritten < length-offset)
     {
         if (startBytesWritten < startDifference)
         {
-            strcat(ret,  startStuff[i])
+            strcat(ret,  startStuff[i]);
             startBytesWritten += 999999;
+            AddToPageTable(pt, MemoryBank, (l%numPages), startStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            i++;
+            l++;
+            
         }
         else if(cacheBytesWritten < length-offset)
         {
             strcat(ret, temp[j]);
             cacheBytesWritten += 999999;
+            AddToPageTable(pt, MemoryBank, (l%numPages), temp[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            j++;
+            l++;
         }
         else if(endBytesWritten < endDifference)
         {
-            strcat(ret, endStuff[j]);
+            strcat(ret, endStuff[k]);
             endBytesWritten += 9999999;
+            AddToPageTable(pt, MemoryBank, (l%numPages), endStuff[i]); //given pt, MemoryBank, index, dataToAdd *****IF DOESN"T HAVE PHYSICAL MEMORY LOCATION, MAKE ONE
+            k++;
+            l++;
         }
-        
-        strcat(ret, MemoryBank->frames[pt->[index]]);
-        sentBytes += MemoryBank->framesBytes[pt->[index]];
-    }
-    
-    
-    //decrement the index variable (wrap around if -1)
-    index--;
-    if (index == -1)
-    {
-        index = numPages-1;
-    }
-    
-    int sentBytes = 0;
-    while (sentBytes < length-offset)
-    {
-        //send message SENT ACK frameBytes to client
-        //************************send some more crap************************
-        strcat(ret, MemoryBank->frames[pt->[index]]);
-        sentBytes += MemoryBank->framesBytes[pt->[index]];
     }
     
     pt->PageTableUseTime = clock();
@@ -296,7 +292,7 @@ char* returnPartialStart(PageTable* pt, struct Memory* MemoryBank, int offset, i
 }
 
 //end of the find is missing
-char* returnPartialEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+/*char* returnPartialEnd(struct PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
 {
     char * ret = malloc(maxData*sizeof(char));
     
@@ -306,10 +302,10 @@ char* returnPartialEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int
     int i;
     for (i = 0; i < numPages; i++)
     {
-        if (pt->PageNumber < max)
+        if (pt->PageNumber[i] < max)
         {
             index = i;
-            max = pt->PageNumber;
+            max = pt->PageNumber[i];
         }
     }
     
@@ -317,8 +313,8 @@ char* returnPartialEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int
     while (sentBytes < length-offset)
     {
         //send message SENT ACK frameBytes to client
-        //************************send some more crap************************
-        strcat(ret, MemoryBank->frames[pt->[index]]);
+        // ************************send some more crap************************
+        strcat(ret, MemoryBank->frames[pt->MemoryLocation[index]]);
         sentBytes += MemoryBank->framesBytes[pt->[index]];
     }
     
@@ -328,7 +324,7 @@ char* returnPartialEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int
 }
 
 //Both start and end are missing
-char* returnPartialStartEnd(PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
+char* returnPartialStartEnd(struct PageTable* pt, struct Memory* MemoryBank, int offset, int length, int miguel)
 {
     char * ret = malloc(maxData*sizeof(char));
     
@@ -338,10 +334,10 @@ char* returnPartialStartEnd(PageTable* pt, struct Memory* MemoryBank, int offset
     int i;
     for (i = 0; i < numPages; i++)
     {
-        if (pt->PageNumber < max)
+        if (pt->PageNumber[i] < max)
         {
             index = i;
-            max = pt->PageNumber;
+            max = pt->PageNumber[i];
         }
     }
     
@@ -349,7 +345,7 @@ char* returnPartialStartEnd(PageTable* pt, struct Memory* MemoryBank, int offset
     while (sentBytes < length-offset)
     {
         //send message SENT ACK frameBytes to client
-        //************************send some more crap************************
+        // ************************send some more crap************************
         strcat(ret, MemoryBank->frames[pt->[index]]);
         sentBytes += MemoryBank->framesBytes[pt->[index]];
     }
@@ -357,12 +353,12 @@ char* returnPartialStartEnd(PageTable* pt, struct Memory* MemoryBank, int offset
     pt->PageTableUseTime = clock();
     
     return ret;
-}
+}*/
 
 char* FindInCache(struct Memory* MemoryBank, char* fileName, int offset, int length, int miguel)
 {
     //find pagetable for fileName
-    PageTable *pt;
+    struct PageTable *pt;
     short inPageTable = 0;
     
     //find pagetable start
@@ -377,8 +373,11 @@ char* FindInCache(struct Memory* MemoryBank, char* fileName, int offset, int len
         }
     }
     
+    
+    return returnPartial(pt, MemoryBank, offset, length, 0);//LAST NUMBER IS MIGUEL
+    
     //if found it's either in partial or full
-    if (inPageTable)
+    /*if (inPageTable)
     {
         short startGap = 0;
         short endGap = 0;
@@ -422,7 +421,7 @@ char* FindInCache(struct Memory* MemoryBank, char* fileName, int offset, int len
     else //else it's not in there at all
     {
         
-    }
+    }*/
     
     
     
