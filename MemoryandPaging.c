@@ -139,10 +139,11 @@ void DeleteOldest(struct Memory* MemoryBank, int deletions){
 char ** GetDirDat(int offset, int length, char* fileName);
 
 //given a page table, same data, and a pagenum, store the data in a CacheLoc and link the PageNum to the CacheLoc
-void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int pageNum, char* data)
+void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int pageNum, char* data, char* name, int offset, int length)
 {
     int min = INT_MIN;
     int index = 0;
+    int* memLocs;// = malloc(sizeof(int));
     
     int i;
     for (i = 0; i < numPages; i++)
@@ -150,7 +151,10 @@ void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int pageNum
         //look for the first -1 you can find.
         if (pt->PageNumber[i] == -1)
         {
+            //if the pagenum is -1 and the cacheLoc is -1, find a frame in CacheMem to store stuff
             index = i;
+            memLocs = findEmpty(MemoryBank, 1);
+            
             break;
         }
         else if(pt->PageNumber[i] > min) //Otherwise just overwrite the smallest indexed thing
@@ -160,40 +164,33 @@ void AddToPageTable(struct PageTable* pt, struct Memory* MemoryBank, int pageNum
         }
     }
     
-    //if the pagenum is -1 and the cacheLoc is -1, find a frame in CacheMem to store stuff
-    //WRITE METHOD TO ADD A FILEINFO (AKA A PAGE TABLE) TO THE FRAMES
-    
     
     //reassign pt->pageNumber[index] to pageNum(provided)
-    
-    
-    //store actual data in the frame we have reserved
-    
-    //set the name too just in case
-    
-    /*think about setting
-     int offset;       //where we start
-     int bytesincache; //Says the amount of bytes in cache
-     */
-    
+    /*DO I NEED TO SET NAME HERE? SHOULD I HAVE THAT PASSED AS AN ARGUMENT?********/
+    pt->Name = name;                        //set the name too just in case
+    pt->PageNumber[index] = pageNum;
+    pt->MemoryLocation[index] = memLocs[0]; //store actual data in the frame we have reserved
+    pt->offset = offset;
+    pt->bytesincache = length;
+    pt->PageTableUseTime = clock();
 }
 
 int* findEmpty(struct Memory* MemoryBank, int framesNecessary){
-	if (framesNecessary > MemoryBank->freeFrames){
+	if (framesNecessary < MemoryBank->freeFrames){
 		//Find the first ones in memory
 	}
-	if (framesNecessary < MemoryBank->freeFrames){
+	else if (framesNecessary > MemoryBank->freeFrames){
 		//delete that many files
 		DeleteOldest(MemoryBank, framesNecessary - MemoryBank->freeFrames);
 	}
-	int * framesreturned = calloc(1024,sizeof(int));
-	int size;
-	size = 0;
+	int * framesreturned = calloc(framesNecessary,sizeof(int));
+	int size = 0;
 	int i;
 	for(i=0;i<numFrames;i++){
-		if(strcmp(MemoryBank->frames[i],"-1")==0){
+		if(strcmp(MemoryBank->frames[i],"-1")==0)
+        {
 			framesreturned[size] = i;
-			size = size + 1;
+            size++;// = size + 1;
 		}
 		if(size == framesNecessary){
 			break;
